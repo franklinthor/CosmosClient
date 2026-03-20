@@ -1,0 +1,26 @@
+{
+    "appId": "com.cosmosclient.desktop",
+    "productName": "Cosmos Desktop Client",
+    "directories": {
+        "output": "release"
+    },
+    "win": {
+        "target": [
+            "nsis"
+        ]
+    },
+    "nsis": {
+        "oneClick": false,
+        "perMachine": false,
+        "allowToChangeInstallationDirectory": true,
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "shortcutName": "Cosmos Client",
+        "artifactName": "CosmosClientSetup.${ext}"
+    },
+    "files": [
+        "dist/**/*",
+        "dist-electron/**/*",
+        "package.json"
+    ]
+}
