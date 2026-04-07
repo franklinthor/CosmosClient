@@ -1,12 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
 import { ConnectionManager } from './components/ConnectionManager/ConnectionManager';
 import { Explorer } from './components/Explorer/Explorer';
 import { ContainerView } from './components/ContainerView/ContainerView';
 import { QueryEditor } from './components/QueryEditor/QueryEditor';
+import { ResizeHandle } from './components/ResizeHandle/ResizeHandle';
+import { useHorizontalResize } from './hooks/useHorizontalResize';
 import { Database, Plus, RefreshCw, Upload, Download, Settings } from 'lucide-react';
 
 type ViewMode = 'welcome' | 'connections' | 'container';
+
+const EXPLORER_DEFAULT_WIDTH = 256;
+const EXPLORER_MIN_WIDTH = 220;
+const MAIN_WORKSPACE_MIN_WIDTH = 620;
 
 function App() {
   const [version, setVersion] = useState<string>('');
@@ -15,6 +21,21 @@ function App() {
   const [containerTab, setContainerTab] = useState<'docs' | 'query'>('docs');
   const [actionStatus, setActionStatus] = useState<string>('');
   const [containerQueries, setContainerQueries] = useState<Record<string, string>>({});
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  const {
+    size: explorerWidth,
+    isResizing: isExplorerResizing,
+    startResizing: startExplorerResize,
+    handleKeyDown: handleExplorerResizeKeyDown,
+    resetSize: resetExplorerWidth,
+  } = useHorizontalResize({
+    containerRef: workspaceRef,
+    storageKey: 'cosmos-client.layout.explorer-width',
+    defaultSize: EXPLORER_DEFAULT_WIDTH,
+    minSize: EXPLORER_MIN_WIDTH,
+    getMaxSize: containerWidth => containerWidth - MAIN_WORKSPACE_MIN_WIDTH,
+  });
 
   useEffect(() => {
     window.api.getVersion().then(setVersion).catch(console.error);
@@ -64,8 +85,9 @@ function App() {
               try {
                 const res = await window.api.exportContainer(selectedContainer.connId, selectedContainer.dbId, selectedContainer.contId);
                 if (res) alert(`Exported ${res.count} documents successfully.`);
-              } catch (e: any) {
-                alert('Export failed: ' + e.message);
+              } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                alert('Export failed: ' + message);
               }
               setActionStatus('');
             }}
@@ -83,8 +105,9 @@ function App() {
               try {
                 const res = await window.api.importContainer(selectedContainer.connId, selectedContainer.dbId, selectedContainer.contId);
                 if (res) alert(`Import complete. Success: ${res.successCount}, Error: ${res.errorCount}`);
-              } catch (e: any) {
-                alert('Import failed: ' + e.message);
+              } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                alert('Import failed: ' + message);
               }
               setActionStatus('');
             }}
@@ -97,9 +120,12 @@ function App() {
       </header>
 
       {/* Main Workspace Split */}
-      <div className="flex flex-1 overflow-hidden">
+      <div ref={workspaceRef} className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 flex-shrink-0 flex flex-col border-r border-border bg-card/50">
+        <aside
+          className="flex shrink-0 flex-col bg-card/50"
+          style={{ width: `${explorerWidth}px` }}
+        >
           <div className="flex h-10 items-center px-4 border-b border-border/50">
             <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Explorer</h2>
           </div>
@@ -111,6 +137,14 @@ function App() {
             }} />
           </div>
         </aside>
+        <ResizeHandle
+          ariaLabel="Resize explorer panel"
+          isActive={isExplorerResizing}
+          onMouseDown={startExplorerResize}
+          onKeyDown={handleExplorerResizeKeyDown}
+          onDoubleClick={resetExplorerWidth}
+          className="bg-card/20"
+        />
 
         {/* Workspace Area */}
         <main className="flex-1 flex flex-col min-w-0 bg-background overflow-hidden relative">
