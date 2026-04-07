@@ -30,7 +30,6 @@ export function ContainerView({
     const [selectedDoc, setSelectedDoc] = useState<{ doc: ContainerDocument, isNew: boolean } | null>(null);
     const [orderBy, setOrderBy] = useState<'DESC' | 'ASC'>('DESC');
     const layoutRef = useRef<HTMLDivElement>(null);
-    const isEditorOpen = Boolean(selectedDoc);
 
     const {
         size: documentListWidth,
@@ -43,8 +42,7 @@ export function ContainerView({
         storageKey: 'cosmos-client.layout.document-list-width',
         defaultSize: DOCUMENT_LIST_DEFAULT_WIDTH,
         minSize: DOCUMENT_LIST_MIN_WIDTH,
-        getMaxSize: containerWidth => containerWidth - DOCUMENT_EDITOR_MIN_WIDTH,
-        enabled: isEditorOpen
+        getMaxSize: containerWidth => containerWidth - DOCUMENT_EDITOR_MIN_WIDTH
     });
 
     const loadDocs = async (continuation?: string, overrideOrderBy?: 'DESC' | 'ASC') => {
@@ -109,11 +107,8 @@ export function ContainerView({
         <div ref={layoutRef} className="flex h-full w-full overflow-hidden bg-background">
             {/* Left Panel: Document List */}
             <div
-                className={cn(
-                    'flex min-w-0 flex-col',
-                    isEditorOpen ? 'shrink-0' : 'flex-1'
-                )}
-                style={isEditorOpen ? { width: `${documentListWidth}px` } : undefined}
+                className={cn('flex min-w-0 shrink-0 flex-col')}
+                style={{ width: `${documentListWidth}px` }}
             >
                 {/* Header Toolbar */}
                 <div className="flex items-center justify-between p-3 border-b border-border bg-card shrink-0">
@@ -227,16 +222,14 @@ export function ContainerView({
                 </div>
             </div>
 
-            {isEditorOpen && (
-                <ResizeHandle
-                    ariaLabel="Resize document list panel"
-                    isActive={isDocumentListResizing}
-                    onMouseDown={startDocumentListResize}
-                    onKeyDown={handleDocumentListResizeKeyDown}
-                    onDoubleClick={resetDocumentListWidth}
-                    className="bg-card/10"
-                />
-            )}
+            <ResizeHandle
+                ariaLabel="Resize document list panel"
+                isActive={isDocumentListResizing}
+                onMouseDown={startDocumentListResize}
+                onKeyDown={handleDocumentListResizeKeyDown}
+                onDoubleClick={resetDocumentListWidth}
+                className="bg-card/10"
+            />
 
             {/* Right Panel: Editor / Empty State */}
             {selectedDoc ? (
@@ -251,7 +244,7 @@ export function ContainerView({
                     />
                 </div>
             ) : (
-                <div className="hidden md:flex flex-1 flex-col items-center justify-center min-w-0 bg-background/50 text-muted-foreground p-8">
+                <div className="flex flex-1 min-w-[360px] flex-col items-center justify-center bg-background/50 p-8 text-muted-foreground">
                     <div className="p-4 rounded-full bg-muted/50 mb-4">
                         <File className="h-10 w-10 opacity-40" />
                     </div>
