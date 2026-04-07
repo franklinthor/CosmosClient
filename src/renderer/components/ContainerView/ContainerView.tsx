@@ -1,6 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { DocumentEditor } from '../DocumentEditor/DocumentEditor';
+import { ResizeHandle } from '../ResizeHandle/ResizeHandle';
+import { useHorizontalResize } from '../../hooks/useHorizontalResize';
+import { cn } from '../../lib/utils';
 import { FileJson, Plus, RefreshCw, ChevronRight, File, Search } from 'lucide-react';
+
+type ContainerDocument = Record<string, unknown> & { id?: string };
+
+const DOCUMENT_LIST_DEFAULT_WIDTH = 420;
+const DOCUMENT_LIST_MIN_WIDTH = 280;
+const DOCUMENT_EDITOR_MIN_WIDTH = 360;
 
 export function ContainerView({
     connId,
@@ -15,71 +24,97 @@ export function ContainerView({
     querySuffix: string,
     onQueryChange: (q: string) => void
 }) {
-    const [documents, setDocuments] = useState<any[]>([]);
+    const [documents, setDocuments] = useState<ContainerDocument[]>([]);
     const [loading, setLoading] = useState(false);
     const [token, setToken] = useState<string | undefined>();
-    const [selectedDoc, setSelectedDoc] = useState<{ doc: any, isNew: boolean } | null>(null);
+    const [selectedDoc, setSelectedDoc] = useState<{ doc: ContainerDocument, isNew: boolean } | null>(null);
     const [orderBy, setOrderBy] = useState<'DESC' | 'ASC'>('DESC');
+    const layoutRef = useRef<HTMLDivElement>(null);
+    const isEditorOpen = Boolean(selectedDoc);
 
-    useEffect(() => {
-        loadDocs();
-        setSelectedDoc(null);
-    }, [connId, dbId, contId]);
+    const {
+        size: documentListWidth,
+        isResizing: isDocumentListResizing,
+        startResizing: startDocumentListResize,
+        handleKeyDown: handleDocumentListResizeKeyDown,
+        resetSize: resetDocumentListWidth
+    } = useHorizontalResize({
+        containerRef: layoutRef,
+        storageKey: 'cosmos-client.layout.document-list-width',
+        defaultSize: DOCUMENT_LIST_DEFAULT_WIDTH,
+        minSize: DOCUMENT_LIST_MIN_WIDTH,
+        getMaxSize: containerWidth => containerWidth - DOCUMENT_EDITOR_MIN_WIDTH,
+        enabled: isEditorOpen
+    });
 
     const loadDocs = async (continuation?: string, overrideOrderBy?: 'DESC' | 'ASC') => {
         setLoading(true);
         const currentOrder = overrideOrderBy || orderBy;
         try {
-            let res;
             const baseQuery = `SELECT * FROM c ${querySuffix}`.trim();
             const fullQuery = baseQuery.toUpperCase().includes('ORDER BY')
                 ? baseQuery
                 : `${baseQuery} ORDER BY c._ts ${currentOrder}`;
 
             // Because ordering is required, we always use queryDocuments
-            res = await window.api.queryDocuments(connId, dbId, contId, fullQuery, 50, continuation);
+            const res = await window.api.queryDocuments(connId, dbId, contId, fullQuery, 50, continuation);
+            const nextDocuments = (res.documents ?? []) as ContainerDocument[];
 
             if (continuation) {
-                setDocuments(prev => [...prev, ...(res.documents ?? [])]);
+                setDocuments(prev => [...prev, ...nextDocuments]);
             } else {
-                setDocuments(res.documents ?? []);
+                setDocuments(nextDocuments);
             }
             setToken(res.continuationToken);
-        } catch (e: any) {
-            alert('Failed to load documents: ' + e.message);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            alert('Failed to load documents: ' + message);
         }
         setLoading(false);
     };
 
-    const handleSave = async (doc: any) => {
-        try {
-            if (selectedDoc?.isNew) {
-                await window.api.createDocument(connId, dbId, contId, doc);
-            } else {
-                await window.api.replaceDocument(connId, dbId, contId, doc);
-            }
-            setSelectedDoc(null);
-            loadDocs();
-        } catch (e: any) {
-            throw e;
+    const loadInitialDocs = useEffectEvent(() => {
+        void loadDocs();
+    });
+
+    useEffect(() => {
+        loadInitialDocs();
+    }, []);
+
+    const handleSave = async (doc: ContainerDocument) => {
+        if (selectedDoc?.isNew) {
+            await window.api.createDocument(connId, dbId, contId, doc);
+        } else {
+            await window.api.replaceDocument(connId, dbId, contId, doc);
         }
+        setSelectedDoc(null);
+        void loadDocs();
     };
 
     const handleDelete = async () => {
         if (!selectedDoc || selectedDoc.isNew) return;
+        const docId = selectedDoc.doc.id;
+        if (!docId) return;
         try {
-            await window.api.deleteDocument(connId, dbId, contId, selectedDoc.doc.id);
+            await window.api.deleteDocument(connId, dbId, contId, docId);
             setSelectedDoc(null);
-            loadDocs();
-        } catch (e: any) {
-            alert('Failed to delete: ' + e.message);
+            void loadDocs();
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error);
+            alert('Failed to delete: ' + message);
         }
     };
 
     return (
-        <div className="flex h-full w-full overflow-hidden bg-background">
+        <div ref={layoutRef} className="flex h-full w-full overflow-hidden bg-background">
             {/* Left Panel: Document List */}
-            <div className={`flex flex-col border-r border-border shrink-0 transition-all duration-300 ${selectedDoc ? 'w-1/3 min-w-[300px]' : 'w-full'}`}>
+            <div
+                className={cn(
+                    'flex min-w-0 flex-col',
+                    isEditorOpen ? 'shrink-0' : 'flex-1'
+                )}
+                style={isEditorOpen ? { width: `${documentListWidth}px` } : undefined}
+            >
                 {/* Header Toolbar */}
                 <div className="flex items-center justify-between p-3 border-b border-border bg-card shrink-0">
                     <div className="flex items-center gap-2">
@@ -192,9 +227,20 @@ export function ContainerView({
                 </div>
             </div>
 
+            {isEditorOpen && (
+                <ResizeHandle
+                    ariaLabel="Resize document list panel"
+                    isActive={isDocumentListResizing}
+                    onMouseDown={startDocumentListResize}
+                    onKeyDown={handleDocumentListResizeKeyDown}
+                    onDoubleClick={resetDocumentListWidth}
+                    className="bg-card/10"
+                />
+            )}
+
             {/* Right Panel: Editor / Empty State */}
             {selectedDoc ? (
-                <div className="flex-1 min-w-0 bg-background z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)] border-l border-border/50">
+                <div className="flex-1 min-w-[360px] bg-background z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)]">
                     <DocumentEditor
                         key={selectedDoc.doc.id || 'new'}
                         doc={selectedDoc.doc}
