@@ -129,8 +129,8 @@ electron_1.ipcMain.handle('cosmos:listContainers', async (_, connId, dbId) => co
 electron_1.ipcMain.handle('cosmos:listDocuments', async (_, connId, dbId, contId, max, token) => cosmosService.listDocuments(connId, dbId, contId, max, token));
 electron_1.ipcMain.handle('cosmos:queryDocuments', async (_, connId, dbId, contId, query, max, token) => cosmosService.queryDocuments(connId, dbId, contId, query, max, token));
 electron_1.ipcMain.handle('cosmos:createDocument', async (_, connId, dbId, contId, doc) => cosmosService.createDocument(connId, dbId, contId, doc));
-electron_1.ipcMain.handle('cosmos:replaceDocument', async (_, connId, dbId, contId, doc, pk) => cosmosService.replaceDocument(connId, dbId, contId, doc, pk));
-electron_1.ipcMain.handle('cosmos:deleteDocument', async (_, connId, dbId, contId, docId, pk) => cosmosService.deleteDocument(connId, dbId, contId, docId, pk));
+electron_1.ipcMain.handle('cosmos:replaceDocument', async (_, connId, dbId, contId, doc, partitionKeyOrSource) => cosmosService.replaceDocument(connId, dbId, contId, doc, partitionKeyOrSource));
+electron_1.ipcMain.handle('cosmos:deleteDocument', async (_, connId, dbId, contId, docId, partitionKeyOrSource) => cosmosService.deleteDocument(connId, dbId, contId, docId, partitionKeyOrSource));
 // Import / Export
 electron_1.ipcMain.handle('cosmos:exportContainer', async (event, connId, dbId, contId) => {
     const window = electron_1.BrowserWindow.fromWebContents(event.sender);

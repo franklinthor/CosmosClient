@@ -5,11 +5,32 @@ import { useHorizontalResize } from '../../hooks/useHorizontalResize';
 import { cn } from '../../lib/utils';
 import { FileJson, Plus, RefreshCw, ChevronRight, File, Search } from 'lucide-react';
 
-type ContainerDocument = Record<string, unknown> & { id?: string };
+type ContainerDocument = Record<string, unknown> & {
+    id?: string;
+    _ts?: number | string;
+};
 
 const DOCUMENT_LIST_DEFAULT_WIDTH = 420;
 const DOCUMENT_LIST_MIN_WIDTH = 280;
 const DOCUMENT_EDITOR_MIN_WIDTH = 360;
+const DOCUMENT_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+});
+
+function formatDocumentTimestamp(timestamp: ContainerDocument['_ts']) {
+    const unixSeconds = typeof timestamp === 'number'
+        ? timestamp
+        : typeof timestamp === 'string'
+            ? Number(timestamp)
+            : Number.NaN;
+
+    if (!Number.isFinite(unixSeconds)) {
+        return null;
+    }
+
+    return DOCUMENT_TIMESTAMP_FORMATTER.format(new Date(unixSeconds * 1000));
+}
 
 export function ContainerView({
     connId,
@@ -83,7 +104,7 @@ export function ContainerView({
         if (selectedDoc?.isNew) {
             await window.api.createDocument(connId, dbId, contId, doc);
         } else {
-            await window.api.replaceDocument(connId, dbId, contId, doc);
+            await window.api.replaceDocument(connId, dbId, contId, doc, selectedDoc?.doc);
         }
         setSelectedDoc(null);
         void loadDocs();
@@ -94,7 +115,7 @@ export function ContainerView({
         const docId = selectedDoc.doc.id;
         if (!docId) return;
         try {
-            await window.api.deleteDocument(connId, dbId, contId, docId);
+            await window.api.deleteDocument(connId, dbId, contId, docId, selectedDoc.doc);
             setSelectedDoc(null);
             void loadDocs();
         } catch (error: unknown) {
@@ -185,6 +206,9 @@ export function ContainerView({
                     ) : (
                         documents.map((doc, i) => {
                             const isSelected = selectedDoc?.doc.id === doc.id;
+                            const preview = `${JSON.stringify(doc).substring(0, 100)}...`;
+                            const formattedTimestamp = formatDocumentTimestamp(doc._ts);
+
                             return (
                                 <div
                                     key={doc.id || i}
@@ -197,9 +221,16 @@ export function ContainerView({
                                         </h4>
                                         <ChevronRight className={`h-4 w-4 shrink-0 transition-transform ${isSelected ? 'text-primary' : 'text-muted-foreground opacity-0 group-hover:opacity-100'}`} />
                                     </div>
-                                    <p className="text-xs text-muted-foreground truncate font-mono opacity-70">
-                                        {JSON.stringify(doc).substring(0, 100)}...
-                                    </p>
+                                    <div className="flex items-center gap-3">
+                                        <p className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground opacity-70">
+                                            {preview}
+                                        </p>
+                                        {formattedTimestamp && (
+                                            <span className="shrink-0 text-[11px] text-muted-foreground/80">
+                                                {formattedTimestamp}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })
