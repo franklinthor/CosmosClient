@@ -1,21 +1,67 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
 import * as monaco from 'monaco-editor';
 import { Play, Table, FileJson, AlertCircle } from 'lucide-react';
 
-export function QueryEditor({ connId, dbId, contId }: { connId: string, dbId: string, contId: string }) {
-    const [query, setQuery] = useState('SELECT * FROM c');
-    const [results, setResults] = useState<any[]>([]);
-    const [viewMode, setViewMode] = useState<'table' | 'json'>('table');
+export type QueryEditorSession = {
+    query: string;
+    results: any[];
+    viewMode: 'table' | 'json';
+    error: string | null;
+};
+
+export const DEFAULT_QUERY_EDITOR_SESSION: QueryEditorSession = {
+    query: 'SELECT * FROM c',
+    results: [],
+    viewMode: 'table',
+    error: null,
+};
+
+function isDisplayableObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeResultsForTable(results: unknown[]) {
+    const rows = results.map(result => isDisplayableObject(result) ? result : { value: result });
+    const columns: string[] = [];
+
+    for (const row of rows) {
+        for (const key of Object.keys(row)) {
+            if (key.startsWith('_') || columns.includes(key)) continue;
+            columns.push(key);
+        }
+    }
+
+    return { rows, columns };
+}
+
+export function QueryEditor({
+    connId,
+    dbId,
+    contId,
+    session,
+    onSessionChange,
+}: {
+    connId: string,
+    dbId: string,
+    contId: string,
+    session: QueryEditorSession,
+    onSessionChange: Dispatch<SetStateAction<QueryEditorSession>>
+}) {
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const editorRef = useRef<HTMLDivElement>(null);
     const monacoRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const onSessionChangeRef = useRef(onSessionChange);
+    const tableData = normalizeResultsForTable(session.results);
+
+    useEffect(() => {
+        onSessionChangeRef.current = onSessionChange;
+    }, [onSessionChange]);
 
     useEffect(() => {
         if (editorRef.current && !monacoRef.current) {
             monacoRef.current = monaco.editor.create(editorRef.current, {
-                value: query,
+                value: session.query,
                 language: 'sql',
                 theme: 'vs-dark',
                 minimap: { enabled: false },
@@ -27,7 +73,8 @@ export function QueryEditor({ connId, dbId, contId }: { connId: string, dbId: st
                 renderLineHighlight: 'all',
             });
             monacoRef.current.onDidChangeModelContent(() => {
-                setQuery(monacoRef.current?.getValue() || '');
+                const nextQuery = monacoRef.current?.getValue() || '';
+                onSessionChangeRef.current(prev => prev.query === nextQuery ? prev : { ...prev, query: nextQuery });
             });
         }
         return () => {
@@ -36,15 +83,30 @@ export function QueryEditor({ connId, dbId, contId }: { connId: string, dbId: st
         }
     }, [contId]); // Re-create / remount when container changes
 
+    useEffect(() => {
+        if (!monacoRef.current) return;
+        if (monacoRef.current.getValue() === session.query) return;
+        monacoRef.current.setValue(session.query);
+    }, [session.query]);
+
     const runQuery = async () => {
         setLoading(true);
-        setError(null);
+        onSessionChange(prev => prev.error === null ? prev : { ...prev, error: null });
         try {
-            const q = monacoRef.current?.getValue() || query;
+            const q = monacoRef.current?.getValue() || session.query;
             const res = await window.api.queryDocuments(connId, dbId, contId, q, 100);
-            setResults(res.documents);
+            onSessionChange(prev => ({
+                ...prev,
+                query: q,
+                results: res.documents,
+                error: null,
+            }));
         } catch (e: any) {
-            setError(e.message);
+            onSessionChange(prev => ({
+                ...prev,
+                query: monacoRef.current?.getValue() || prev.query,
+                error: e.message,
+            }));
         }
         setLoading(false);
     };
@@ -76,25 +138,25 @@ export function QueryEditor({ connId, dbId, contId }: { connId: string, dbId: st
             <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/50 shrink-0">
                 <div className="flex items-center gap-3">
                     <span className="text-xs font-medium text-muted-foreground">
-                        {results.length > 0 ? `${results.length} Results` : 'No Results'}
+                        {session.results.length > 0 ? `${session.results.length} Results` : 'No Results'}
                     </span>
-                    {error && (
+                    {session.error && (
                         <span className="flex items-center gap-1.5 text-xs text-destructive">
-                            <AlertCircle className="h-3.5 w-3.5" /> {error}
+                            <AlertCircle className="h-3.5 w-3.5" /> {session.error}
                         </span>
                     )}
                 </div>
 
                 <div className="flex items-center p-0.5 bg-muted rounded-md border border-border/50">
                     <button
-                        onClick={() => setViewMode('table')}
-                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-sm transition-colors ${viewMode === 'table' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => onSessionChange(prev => ({ ...prev, viewMode: 'table' }))}
+                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-sm transition-colors ${session.viewMode === 'table' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                         <Table className="h-3.5 w-3.5" /> Table
                     </button>
                     <button
-                        onClick={() => setViewMode('json')}
-                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-sm transition-colors ${viewMode === 'json' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                        onClick={() => onSessionChange(prev => ({ ...prev, viewMode: 'json' }))}
+                        className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-sm transition-colors ${session.viewMode === 'json' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                     >
                         <FileJson className="h-3.5 w-3.5" /> JSON
                     </button>
@@ -112,42 +174,56 @@ export function QueryEditor({ connId, dbId, contId }: { connId: string, dbId: st
                     </div>
                 )}
 
-                {!loading && viewMode === 'json' && results.length > 0 && (
+                {!loading && session.viewMode === 'json' && session.results.length > 0 && (
                     <div className="p-4">
-                        <pre className="text-[13px] font-mono text-muted-foreground whitespace-pre-wrap">{JSON.stringify(results, null, 2)}</pre>
+                        <pre className="text-[13px] font-mono text-muted-foreground whitespace-pre-wrap">{JSON.stringify(session.results, null, 2)}</pre>
                     </div>
                 )}
 
-                {!loading && viewMode === 'table' && results.length > 0 && (
+                {!loading && session.viewMode === 'table' && session.results.length > 0 && (
                     <div className="w-full inline-block min-w-full align-middle p-4">
-                        <div className="border border-border rounded-lg overflow-hidden bg-card">
-                            <table className="min-w-full divide-y divide-border">
-                                <thead className="bg-muted/50">
-                                    <tr>
-                                        {Object.keys(results[0]).filter(k => !k.startsWith('_')).map(k => (
-                                            <th key={k} scope="col" className="px-4 py-2 text-left text-xs font-semibold text-foreground tracking-wider whitespace-nowrap">
-                                                {k}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-card divide-y divide-border">
-                                    {results.map((r, i) => (
-                                        <tr key={i} className="hover:bg-muted/30 transition-colors">
-                                            {Object.keys(results[0]).filter(k => !k.startsWith('_')).map(k => (
-                                                <td key={k} className="px-4 py-2 text-xs text-muted-foreground max-w-[300px] truncate" title={typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k])}>
-                                                    {typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k])}
-                                                </td>
+                        {tableData.columns.length > 0 ? (
+                            <div className="border border-border rounded-lg overflow-hidden bg-card">
+                                <table className="min-w-full divide-y divide-border">
+                                    <thead className="bg-muted/50">
+                                        <tr>
+                                            {tableData.columns.map(column => (
+                                                <th key={column} scope="col" className="px-4 py-2 text-left text-xs font-semibold text-foreground tracking-wider whitespace-nowrap">
+                                                    {column}
+                                                </th>
                                             ))}
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody className="bg-card divide-y divide-border">
+                                        {tableData.rows.map((row, i) => (
+                                            <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                                {tableData.columns.map(column => {
+                                                    const value = row[column];
+                                                    const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
+                                                    return (
+                                                        <td key={column} className="px-4 py-2 text-xs text-muted-foreground max-w-[300px] truncate" title={displayValue}>
+                                                            {displayValue}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 text-center">
+                                <p className="text-sm text-muted-foreground">
+                                    Query returned rows, but none had displayable columns. Try JSON view or filter with
+                                    <span className="mx-1 font-mono text-foreground">IS_DEFINED(...)</span>
+                                    to exclude undefined values.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {!loading && results.length === 0 && !error && (
+                {!loading && session.results.length === 0 && !session.error && (
                     <div className="flex h-full items-center justify-center text-muted-foreground">
                         <span className="text-sm">Run a query to view results</span>
                     </div>

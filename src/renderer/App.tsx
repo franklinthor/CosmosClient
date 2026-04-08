@@ -3,24 +3,30 @@ import './App.css';
 import { ConnectionManager } from './components/ConnectionManager/ConnectionManager';
 import { Explorer } from './components/Explorer/Explorer';
 import { ContainerView } from './components/ContainerView/ContainerView';
-import { QueryEditor } from './components/QueryEditor/QueryEditor';
+import { DEFAULT_QUERY_EDITOR_SESSION, QueryEditor, type QueryEditorSession } from './components/QueryEditor/QueryEditor';
 import { ResizeHandle } from './components/ResizeHandle/ResizeHandle';
 import { useHorizontalResize } from './hooks/useHorizontalResize';
 import { Database, Plus, RefreshCw, Upload, Download, Settings } from 'lucide-react';
 
 type ViewMode = 'welcome' | 'connections' | 'container';
+type ContainerTarget = { connId: string, dbId: string, contId: string };
 
 const EXPLORER_DEFAULT_WIDTH = 256;
 const EXPLORER_MIN_WIDTH = 220;
 const MAIN_WORKSPACE_MIN_WIDTH = 620;
 
+function getContainerKey({ connId, dbId, contId }: ContainerTarget) {
+  return `${connId}-${dbId}-${contId}`;
+}
+
 function App() {
   const [version, setVersion] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('connections');
-  const [selectedContainer, setSelectedContainer] = useState<{ connId: string, dbId: string, contId: string } | null>(null);
+  const [selectedContainer, setSelectedContainer] = useState<ContainerTarget | null>(null);
   const [containerTab, setContainerTab] = useState<'docs' | 'query'>('docs');
   const [actionStatus, setActionStatus] = useState<string>('');
   const [containerQueries, setContainerQueries] = useState<Record<string, string>>({});
+  const [containerQuerySessions, setContainerQuerySessions] = useState<Record<string, QueryEditorSession>>({});
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -40,6 +46,11 @@ function App() {
   useEffect(() => {
     window.api.getVersion().then(setVersion).catch(console.error);
   }, []);
+
+  const selectedContainerKey = selectedContainer ? getContainerKey(selectedContainer) : null;
+  const selectedContainerQuerySession = selectedContainerKey
+    ? containerQuerySessions[selectedContainerKey] ?? DEFAULT_QUERY_EDITOR_SESSION
+    : DEFAULT_QUERY_EDITOR_SESSION;
 
   return (
     <div className="flex h-screen w-full flex-col bg-background text-foreground overflow-hidden">
@@ -201,8 +212,11 @@ function App() {
                     connId={selectedContainer.connId}
                     dbId={selectedContainer.dbId}
                     contId={selectedContainer.contId}
-                    querySuffix={containerQueries[`${selectedContainer.connId}-${selectedContainer.dbId}-${selectedContainer.contId}`] || ''}
-                    onQueryChange={(q) => setContainerQueries(prev => ({ ...prev, [`${selectedContainer.connId}-${selectedContainer.dbId}-${selectedContainer.contId}`]: q }))}
+                    querySuffix={selectedContainerKey ? containerQueries[selectedContainerKey] || '' : ''}
+                    onQueryChange={(q) => {
+                      if (!selectedContainerKey) return;
+                      setContainerQueries(prev => ({ ...prev, [selectedContainerKey]: q }));
+                    }}
                   />
                 )}
                 {containerTab === 'query' && (
@@ -211,6 +225,15 @@ function App() {
                     connId={selectedContainer.connId}
                     dbId={selectedContainer.dbId}
                     contId={selectedContainer.contId}
+                    session={selectedContainerQuerySession}
+                    onSessionChange={(nextSession) => {
+                      if (!selectedContainerKey) return;
+                      setContainerQuerySessions(prev => {
+                        const currentSession = prev[selectedContainerKey] ?? DEFAULT_QUERY_EDITOR_SESSION;
+                        const resolvedSession = typeof nextSession === 'function' ? nextSession(currentSession) : nextSession;
+                        return { ...prev, [selectedContainerKey]: resolvedSession };
+                      });
+                    }}
                   />
                 )}
               </div>

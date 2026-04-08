@@ -13,8 +13,8 @@ declare global {
         listDocuments: (connId: string, dbId: string, contId: string, max?: number, token?: string) => Promise<{ documents: any[]; continuationToken?: string }>;
         queryDocuments: (connId: string, dbId: string, contId: string, query: string, max?: number, token?: string) => Promise<{ documents: any[]; continuationToken?: string }>;
         createDocument: (connId: string, dbId: string, contId: string, doc: any) => Promise<any>;
-        replaceDocument: (connId: string, dbId: string, contId: string, doc: any, pk?: any) => Promise<any>;
-        deleteDocument: (connId: string, dbId: string, contId: string, docId: string, pk?: any) => Promise<{ success: boolean }>;
+        replaceDocument: (connId: string, dbId: string, contId: string, doc: any, partitionKeyOrSource?: any) => Promise<any>;
+        deleteDocument: (connId: string, dbId: string, contId: string, docId: string, partitionKeyOrSource?: any) => Promise<{ success: boolean }>;
         exportContainer: (connId: string, dbId: string, contId: string) => Promise<{ success: boolean; count: number } | null>;
         importContainer: (connId: string, dbId: string, contId: string) => Promise<{ success: boolean; successCount: number; errorCount: number } | null>;
         getFavourites: () => Promise<FavoriteKey[]>;
