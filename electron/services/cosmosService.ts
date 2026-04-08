@@ -1,4 +1,4 @@
-import { CosmosClient, type Container, type PartitionKey, type PartitionKeyDefinition, type PrimitivePartitionKeyValue } from '@azure/cosmos';
+import { CosmosClient, type Container, type NonePartitionKeyType, type PartitionKey, type PartitionKeyDefinition, type PrimitivePartitionKeyValue } from '@azure/cosmos';
 import * as fs from 'fs';
 import { store } from '../store';
 
@@ -9,11 +9,11 @@ type CosmosDocument = Record<string, unknown> & {
 type PartitionKeySource = PartitionKey | CosmosDocument;
 
 const DEFAULT_PARTITION_KEY_PATH = '/_partitionKey';
-const NONE_PARTITION_KEY_LITERAL = {} as Record<string, never>;
+const NONE_PARTITION_KEY_LITERAL = {} as NonePartitionKeyType;
 const partitionKeyDefinitionCache = new Map<string, PartitionKeyDefinition | undefined>();
 
 function getClient(connectionId: string): CosmosClient {
-    const connections = store.get('connections') as any[];
+    const connections = store.get('connections');
     const conn = connections.find(c => c.id === connectionId);
     if (!conn) throw new Error('Connection not found');
     return new CosmosClient({ endpoint: conn.endpoint, key: conn.key });
@@ -44,17 +44,16 @@ function getContainerCacheKey(connectionId: string, databaseId: string, containe
 }
 
 function isDocumentPartitionKeySource(value: PartitionKeySource | undefined): value is CosmosDocument {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === 'object' && value !== null && !Array.isArray(value) && !isNonePartitionKeyLiteral(value);
 }
 
-function isNonePartitionKeyLiteral(value: unknown): value is Record<string, never> {
+function isNonePartitionKeyLiteral(value: unknown): value is NonePartitionKeyType {
     return typeof value === 'object' && value !== null && Object.keys(value).length === 0;
 }
 
 async function getPartitionKeyDefinition(container: Container, cacheKey: string): Promise<PartitionKeyDefinition | undefined> {
-    const cached = partitionKeyDefinitionCache.get(cacheKey);
-    if (cached) {
-        return cached;
+    if (partitionKeyDefinitionCache.has(cacheKey)) {
+        return partitionKeyDefinitionCache.get(cacheKey);
     }
 
     const { resource } = await container.read();
@@ -148,7 +147,11 @@ function extractPartitionKeyValue(path: string, source: unknown): PrimitiveParti
         return null;
     }
 
-    if (current === undefined || isNonePartitionKeyLiteral(current)) {
+    if (current === undefined) {
+        return undefined;
+    }
+
+    if (path === DEFAULT_PARTITION_KEY_PATH && isNonePartitionKeyLiteral(current)) {
         return NONE_PARTITION_KEY_LITERAL;
     }
 
@@ -232,8 +235,8 @@ export async function testConnection(endpoint: string, key: string): Promise<{ s
         const client = new CosmosClient({ endpoint, key });
         await client.getDatabaseAccount();
         return { success: true };
-    } catch (error: any) {
-        return { success: false, error: error.message || 'Unknown connection error' };
+    } catch (error: unknown) {
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown connection error' };
     }
 }
 
@@ -328,7 +331,7 @@ export async function importContainer(connectionId: string, databaseId: string, 
         try {
             await container.items.upsert(item);
             successCount++;
-        } catch (e) {
+        } catch {
             errorCount++;
         }
     }

@@ -259,69 +259,71 @@ export function Explorer({ onSelectContainer }: ExplorerProps) {
                                             <span className="text-[10px] uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">{favouriteDbIds.size}</span>
                                         </div>
 
-                                        <div className="pl-4 pb-1 space-y-0.5 border-l border-border/50 ml-[11px]">
-                                            {loadingDatabases && (
-                                                <div className="px-6 py-1 text-xs text-muted-foreground animate-pulse">Loading...</div>
-                                            )}
+                                        {isConnExpanded && (
+                                            <div className="pl-4 pb-1 space-y-0.5 border-l border-border/50 ml-[11px]">
+                                                {loadingDatabases && (
+                                                    <div className="px-6 py-1 text-xs text-muted-foreground animate-pulse">Loading...</div>
+                                                )}
 
-                                            {resolvedDatabases.map(db => {
-                                                const dbKey = `${conn.id}-${db.id}`;
-                                                const isDbExpanded = expandedFavouriteDbs[dbKey];
-                                                const sorted = sortedContainers(conn.id, db.id, containers[dbKey] ?? []);
-                                                return (
-                                                    <div key={db.id}>
-                                                        <div
-                                                            onClick={() => void toggleFavouriteDatabase(conn.id, db.id)}
-                                                            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted group transition-colors"
-                                                        >
-                                                            {isDbExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                                                            <Database className="h-4 w-4 text-blue-400 opacity-80" />
-                                                            <span className="text-sm text-foreground/90 truncate flex-1">{db.id}</span>
-                                                            <button
-                                                                onClick={e => toggleDatabaseFavourite(e, conn.id, db.id)}
-                                                                className="shrink-0 p-0.5 rounded transition-all opacity-80 hover:opacity-100"
-                                                                title="Remove from favourites"
+                                                {resolvedDatabases.map(db => {
+                                                    const dbKey = `${conn.id}-${db.id}`;
+                                                    const isDbExpanded = expandedFavouriteDbs[dbKey];
+                                                    const sorted = sortedContainers(conn.id, db.id, containers[dbKey] ?? []);
+                                                    return (
+                                                        <div key={db.id}>
+                                                            <div
+                                                                onClick={() => void toggleFavouriteDatabase(conn.id, db.id)}
+                                                                className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-muted group transition-colors"
                                                             >
-                                                                <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
-                                                            </button>
-                                                        </div>
-
-                                                        {isDbExpanded && (
-                                                            <div className="pl-4 mt-0.5 space-y-0.5 border-l border-border/50 ml-[11px]">
-                                                                {loadingObj[dbKey] && <div className="px-6 py-1 text-xs text-muted-foreground animate-pulse">Loading...</div>}
-
-                                                                {sorted.map(cont => {
-                                                                    const favKey = buildContainerFavoriteKey(conn.id, db.id, cont.id);
-                                                                    const isFav = favourites.has(favKey);
-                                                                    return (
-                                                                        <div
-                                                                            key={cont.id}
-                                                                            onClick={() => onSelectContainer(conn.id, db.id, cont.id)}
-                                                                            className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground group transition-colors ml-1"
-                                                                        >
-                                                                            <FolderCode className="h-3.5 w-3.5 text-yellow-500/80 shrink-0" />
-                                                                            <span className="text-sm truncate flex-1">{cont.id}</span>
-                                                                            <button
-                                                                                onClick={e => toggleContainerFavourite(e, conn.id, db.id, cont.id)}
-                                                                                className={`shrink-0 p-0.5 rounded transition-all ${isFav ? 'opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'}`}
-                                                                                title={isFav ? 'Remove from favourites' : 'Add to favourites'}
-                                                                            >
-                                                                                <Star
-                                                                                    className={`h-3.5 w-3.5 transition-colors ${isFav ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`}
-                                                                                />
-                                                                            </button>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                                {(!containers[dbKey] || containers[dbKey].length === 0) && !loadingObj[dbKey] && (
-                                                                    <div className="pl-8 py-1 text-xs text-muted-foreground italic">No containers found</div>
-                                                                )}
+                                                                {isDbExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                                                                <Database className="h-4 w-4 text-blue-400 opacity-80" />
+                                                                <span className="text-sm text-foreground/90 truncate flex-1">{db.id}</span>
+                                                                <button
+                                                                    onClick={e => toggleDatabaseFavourite(e, conn.id, db.id)}
+                                                                    className="shrink-0 p-0.5 rounded transition-all opacity-80 hover:opacity-100"
+                                                                    title="Remove from favourites"
+                                                                >
+                                                                    <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" />
+                                                                </button>
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+
+                                                            {isDbExpanded && (
+                                                                <div className="pl-4 mt-0.5 space-y-0.5 border-l border-border/50 ml-[11px]">
+                                                                    {loadingObj[dbKey] && <div className="px-6 py-1 text-xs text-muted-foreground animate-pulse">Loading...</div>}
+
+                                                                    {sorted.map(cont => {
+                                                                        const favKey = buildContainerFavoriteKey(conn.id, db.id, cont.id);
+                                                                        const isFav = favourites.has(favKey);
+                                                                        return (
+                                                                            <div
+                                                                                key={cont.id}
+                                                                                onClick={() => onSelectContainer(conn.id, db.id, cont.id)}
+                                                                                className="flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-md cursor-pointer hover:bg-accent hover:text-accent-foreground group transition-colors ml-1"
+                                                                            >
+                                                                                <FolderCode className="h-3.5 w-3.5 text-yellow-500/80 shrink-0" />
+                                                                                <span className="text-sm truncate flex-1">{cont.id}</span>
+                                                                                <button
+                                                                                    onClick={e => toggleContainerFavourite(e, conn.id, db.id, cont.id)}
+                                                                                    className={`shrink-0 p-0.5 rounded transition-all ${isFav ? 'opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'}`}
+                                                                                    title={isFav ? 'Remove from favourites' : 'Add to favourites'}
+                                                                                >
+                                                                                    <Star
+                                                                                        className={`h-3.5 w-3.5 transition-colors ${isFav ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`}
+                                                                                    />
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                    {(!containers[dbKey] || containers[dbKey].length === 0) && !loadingObj[dbKey] && (
+                                                                        <div className="pl-8 py-1 text-xs text-muted-foreground italic">No containers found</div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

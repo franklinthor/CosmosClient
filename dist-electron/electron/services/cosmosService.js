@@ -75,15 +75,14 @@ function getContainerCacheKey(connectionId, databaseId, containerId) {
     return `${connectionId}::${databaseId}::${containerId}`;
 }
 function isDocumentPartitionKeySource(value) {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === 'object' && value !== null && !Array.isArray(value) && !isNonePartitionKeyLiteral(value);
 }
 function isNonePartitionKeyLiteral(value) {
     return typeof value === 'object' && value !== null && Object.keys(value).length === 0;
 }
 async function getPartitionKeyDefinition(container, cacheKey) {
-    const cached = partitionKeyDefinitionCache.get(cacheKey);
-    if (cached) {
-        return cached;
+    if (partitionKeyDefinitionCache.has(cacheKey)) {
+        return partitionKeyDefinitionCache.get(cacheKey);
     }
     const { resource } = await container.read();
     const partitionKeyDefinition = resource?.partitionKey;
@@ -160,7 +159,10 @@ function extractPartitionKeyValue(path, source) {
     if (current === null) {
         return null;
     }
-    if (current === undefined || isNonePartitionKeyLiteral(current)) {
+    if (current === undefined) {
+        return undefined;
+    }
+    if (path === DEFAULT_PARTITION_KEY_PATH && isNonePartitionKeyLiteral(current)) {
         return NONE_PARTITION_KEY_LITERAL;
     }
     return undefined;
@@ -225,7 +227,7 @@ async function testConnection(endpoint, key) {
         return { success: true };
     }
     catch (error) {
-        return { success: false, error: error.message || 'Unknown connection error' };
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown connection error' };
     }
 }
 async function listDatabases(connectionId) {
@@ -295,7 +297,7 @@ async function importContainer(connectionId, databaseId, containerId, filePath) 
             await container.items.upsert(item);
             successCount++;
         }
-        catch (e) {
+        catch {
             errorCount++;
         }
     }
